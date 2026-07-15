@@ -86,4 +86,123 @@ REPORT_GENERATOR_TOOL = {
     },
 }
 
-ALL_TOOLS = [COMPATIBILITY_CHECKER_TOOL, ERROR_LOG_ANALYZER_TOOL, REPORT_GENERATOR_TOOL]
+POWER_BUDGET_TOOL = {
+    "name": "calculate_power_budget",
+    "description": (
+        "Compute total current draw vs. a supply's current budget for "
+        "components on one voltage rail (Ohm's Law + current summation). "
+        "Call when asked if a supply (USB/wall adapter/battery) can power "
+        "given components, or for current-budget math. Always call this for "
+        "the arithmetic itself, never estimate margin yourself. Needs "
+        "current_ma or resistance_ohms per component; omit both rather than "
+        "guessing — flagged as missing data."
+    ),
+    "parameters": {
+        "type": "object",
+        "properties": {
+            "supply_voltage_v": {
+                "type": "number",
+                "description": "Rail voltage, e.g. 5.0 or 3.3.",
+            },
+            "supply_current_limit_ma": {
+                "type": "number",
+                "description": "Supply's rated mA (e.g. 500=USB 2.0, 900=USB 3.0, 2000=5V/2A adapter). Ask if unstated, don't guess.",
+            },
+            "components": {
+                "type": "array",
+                "description": "Loads sharing the rail.",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "name": {"type": "string"},
+                        "quantity": {"type": "integer", "default": 1},
+                        "current_ma": {"type": "number", "description": "Known steady-state draw in mA."},
+                        "resistance_ohms": {"type": "number", "description": "Used to derive current via Ohm's Law if current_ma unknown."},
+                        "peak_current_ma": {"type": "number", "description": "Peak/stall current if different from steady-state."},
+                        "note": {"type": "string"},
+                    },
+                    "required": ["name"],
+                },
+            },
+        },
+        "required": ["supply_voltage_v", "supply_current_limit_ma", "components"],
+    },
+}
+
+MULTIMETER_ASSISTANT_TOOL = {
+    "name": "guide_multimeter_measurement",
+    "description": (
+        "Guide a multimeter measurement (DC voltage/resistance/continuity/"
+        "current) and/or interpret a reading already taken. Call when "
+        "diagnosis calls for a real measurement over speculation — the "
+        "structured version of 'measurement before speculation.' Call once "
+        "to request the measurement (measured_value omitted), again once "
+        "reported (measured_value provided) for grounded interpretation."
+    ),
+    "parameters": {
+        "type": "object",
+        "properties": {
+            "measurement_type": {
+                "type": "string",
+                "enum": ["voltage_dc", "resistance", "continuity", "current_dc"],
+                "description": "Which kind of measurement.",
+            },
+            "test_point": {
+                "type": "string",
+                "description": "What's being measured, e.g. '3.3V rail', 'I2C SDA/SCL pull-up', 'GPIO2 output state'.",
+            },
+            "component_or_pin": {
+                "type": "string",
+                "description": "Optional GPIO (e.g. 'GPIO34') or named component if the measurement targets one directly.",
+            },
+            "measured_value": {
+                "type": "number",
+                "description": "Numeric reading, if already taken. Omit when just requesting a measurement.",
+            },
+            "unit": {
+                "type": "string",
+                "description": "Unit of measured_value, e.g. 'V' or 'ohm'. Needed with voltage readings for HIGH/LOW interpretation.",
+            },
+            "meter_beeped": {
+                "type": "boolean",
+                "description": "For continuity, whether the beep sounded, if reported that way instead of a raw ohms value.",
+            },
+        },
+        "required": ["measurement_type", "test_point"],
+    },
+}
+
+SYMPTOM_MAP_TOOL = {
+    "name": "map_symptom_to_root_cause",
+    "description": (
+        "Browse known failure categories or look up likely root causes for a "
+        "described symptom, grounded in the failure library (common-"
+        "failures.md) plus retrieved context. Call with no args to browse. "
+        "Call with symptom_description when the user describes a fault in "
+        "their own words (e.g. 'display is blank', 'keeps resetting') early "
+        "in a session, to surface documented patterns fast."
+    ),
+    "parameters": {
+        "type": "object",
+        "properties": {
+            "symptom_description": {
+                "type": "string",
+                "description": "Symptom in the user's own words. Omit to browse categories.",
+            },
+            "category_hint": {
+                "type": "string",
+                "description": "Known category, e.g. 'i2c_communication', 'power_brownout', 'firmware_crash', 'output_driver_mismatch', 'sensor_erratic'.",
+            },
+        },
+        "required": [],
+    },
+}
+
+ALL_TOOLS = [
+    COMPATIBILITY_CHECKER_TOOL,
+    ERROR_LOG_ANALYZER_TOOL,
+    REPORT_GENERATOR_TOOL,
+    POWER_BUDGET_TOOL,
+    MULTIMETER_ASSISTANT_TOOL,
+    SYMPTOM_MAP_TOOL,
+]

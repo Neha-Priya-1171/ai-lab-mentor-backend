@@ -22,6 +22,11 @@
   #chatHeader h2 { font-size: 14px; margin: 0; color: #555; }
   #newSessionBtn { background: #f4f4f4; border: 1px solid #ccc; border-radius: 6px; font-size: 12px; padding: 6px 10px; }
   #newSessionBtn:hover { background: #eaeaea; }
+  #quickActions { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+  .quick-btn { background: #fff; border: 1px solid #ccc; border-radius: 6px; font-size: 13px; padding: 6px 12px; cursor: pointer; }
+  .quick-btn:hover { background: #f4f4f4; }
+  .quick-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+  .quick-btn:disabled:hover { background: #fff; }
 </style>
 </head>
 <body>
@@ -44,6 +49,12 @@
   <div id="chatHeader">
     <h2>Diagnostic session</h2>
     <button id="newSessionBtn" onclick="newSession()">↻ New Session</button>
+  </div>
+  <div id="quickActions">
+    <button class="quick-btn" onclick="quickAction('Help me check if my power supply can handle all my components.')">🔋 Power Budget Check</button>
+    <button class="quick-btn" onclick="quickAction('Walk me through taking a multimeter measurement to help diagnose my issue.')">🔌 Multimeter Assistant</button>
+    <button class="quick-btn" onclick="quickAction('What common failure categories do you know about?')">🔍 Browse Known Issues</button>
+    <button class="quick-btn" id="reportBtn" disabled onclick="quickAction('Can you generate a full diagnostic report for this session?')">📄 Generate Report</button>
   </div>
   <div id="log"></div>
   <div id="inputRow">
@@ -87,7 +98,14 @@ function addToolNote(toolNames) {
 function newSession() {
   history = [];
   log.innerHTML = "";
+  document.getElementById("reportBtn").disabled = true;
   document.getElementById("messageInput").focus();
+}
+
+function quickAction(text) {
+  const msgInput = document.getElementById("messageInput");
+  msgInput.value = text;
+  send();
 }
 
 async function send() {
@@ -119,6 +137,7 @@ async function send() {
     addToolNote(data.tool_calls_made);
     history.push({ role: "user", content: message });
     history.push({ role: "assistant", content: data.reply });
+    document.getElementById("reportBtn").disabled = false;
   } catch (err) {
     addMessage("assistant", "Network error: " + err.message);
   }
