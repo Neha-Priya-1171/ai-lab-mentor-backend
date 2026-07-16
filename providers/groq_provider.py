@@ -29,7 +29,7 @@ class GroqProvider(LLMProvider):
         messages: list[dict[str, Any]],
         tools: list[dict[str, Any]] | None = None,
         temperature: float = 0.2,
-        max_tokens: int = 4096,
+        max_tokens: int = 2560,
         model: str = DEFAULT_MODEL,
     ) -> ChatResult:
         if not api_key:

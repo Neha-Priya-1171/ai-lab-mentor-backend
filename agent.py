@@ -26,7 +26,7 @@ from typing import Any
 from providers.base import ChatResult, ProviderError
 from providers.registry import get_provider
 from tools.dispatcher import dispatch
-from tools.schemas import ALL_TOOLS
+from tools.schemas import get_relevant_tools
 
 MAX_TOOL_ITERATIONS = 5
 
@@ -46,6 +46,7 @@ def run_agent_turn(
     """
     provider = get_provider(provider_name)
     full_messages: list[dict[str, Any]] = [{"role": "system", "content": system_prompt}] + messages
+    relevant_tools = get_relevant_tools(messages)
 
     tool_calls_made: list[str] = []
 
@@ -53,7 +54,7 @@ def run_agent_turn(
         result: ChatResult = provider.chat(
             api_key=api_key,
             messages=full_messages,
-            tools=ALL_TOOLS,
+            tools=relevant_tools,
             temperature=temperature,
         )
 

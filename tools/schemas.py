@@ -206,3 +206,67 @@ ALL_TOOLS = [
     MULTIMETER_ASSISTANT_TOOL,
     SYMPTOM_MAP_TOOL,
 ]
+
+# ---------------------------------------------------------------------------
+# Per-turn tool filtering (Phase 7 TPM mitigation)
+# ---------------------------------------------------------------------------
+# Groq's free-tier TPM limit (12,000) reserves the full tool-schema list
+# against every single request. Sending all 6 tools every turn is real,
+# measured overhead (~1,932 tokens). This trims that -- but deliberately
+# does NOT try to guess "the one tool" the model needs, since a live test
+# proved check_component_compatibility, analyze_error_log,
+# calculate_power_budget, and guide_multimeter_measurement genuinely chain
+# together within a single troubleshooting flow (multimeter reading fed a
+# power-budget check fed another multimeter reading in the same session).
+# Those four are always sent together as one cluster.
+#
+# Only generate_diagnostic_report and map_symptom_to_root_cause are ever
+# excluded, and only when there's a clear, safe signal to do so. Bias is
+# deliberately toward INCLUSION on any ambiguity -- a false inclusion only
+# costs tokens, a false exclusion breaks a real capability. This is a
+# genuine trade-off, not a routing rule reintroducing Phase 4's hardcoded
+# Step-0 mode detection: the model still freely picks among whatever's
+# offered each turn.
+
+CORE_TOOL_CLUSTER = [
+    COMPATIBILITY_CHECKER_TOOL,
+    ERROR_LOG_ANALYZER_TOOL,
+    POWER_BUDGET_TOOL,
+    MULTIMETER_ASSISTANT_TOOL,
+]
+
+_SYMPTOM_KEYWORDS = (
+    "what's usually", "whats usually", "why does", "why is", "common cause",
+    "common failure", "browse", "categories", "category", "what causes",
+    "usual cause", "known issues",
+)
+
+
+def get_relevant_tools(messages: list[dict]) -> list[dict]:
+    """
+    messages: the conversation history agent.py is about to send (before the
+    system prompt is prepended), same list run_agent_turn already has.
+
+    Returns the tool list to actually send this turn. Always includes the
+    4-tool core cluster. Conditionally adds Report Generator (once there's
+    real history to report on -- mirrors static/index.html's own
+    reportBtn disabled-until-first-exchange rule) and Symptom Mapping
+    (early in a session, or on a clear symptom-browsing phrase).
+    """
+    tools = list(CORE_TOOL_CLUSTER)
+
+    latest_user_text = ""
+    for m in reversed(messages):
+        if m.get("role") == "user":
+            latest_user_text = str(m.get("content") or "").lower()
+            break
+
+    if len(messages) > 1:
+        tools.append(REPORT_GENERATOR_TOOL)
+
+    early_session = len(messages) <= 4
+    symptom_signal = any(kw in latest_user_text for kw in _SYMPTOM_KEYWORDS)
+    if early_session or symptom_signal:
+        tools.append(SYMPTOM_MAP_TOOL)
+
+    return tools
