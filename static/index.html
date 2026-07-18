@@ -55,6 +55,7 @@
     <button class="quick-btn" onclick="quickAction('Walk me through taking a multimeter measurement to help diagnose my issue.')">🔌 Multimeter Assistant</button>
     <button class="quick-btn" onclick="quickAction('What common failure categories do you know about?')">🔍 Browse Known Issues</button>
     <button class="quick-btn" id="reportBtn" disabled onclick="quickAction('Can you generate a full diagnostic report for this session?')">📄 Generate Report</button>
+    <button class="quick-btn" id="quizBtn" disabled onclick="quickAction('Quiz me on the reasoning behind this session.')">🎓 Quiz Me</button>
   </div>
   <div id="log"></div>
   <div id="inputRow">
@@ -99,6 +100,7 @@ function newSession() {
   history = [];
   log.innerHTML = "";
   document.getElementById("reportBtn").disabled = true;
+  document.getElementById("quizBtn").disabled = true;
   document.getElementById("messageInput").focus();
 }
 
@@ -138,6 +140,7 @@ async function send() {
     history.push({ role: "user", content: message });
     history.push({ role: "assistant", content: data.reply });
     document.getElementById("reportBtn").disabled = false;
+    document.getElementById("quizBtn").disabled = false;
   } catch (err) {
     addMessage("assistant", "Network error: " + err.message);
   }

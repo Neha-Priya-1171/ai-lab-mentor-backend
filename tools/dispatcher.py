@@ -160,7 +160,6 @@ def generate_diagnostic_report(session_transcript: str) -> str:
     context_blocks: list[str] = []
     for term in found_terms:
         chunks = _retrieve(f"{term} datasheet reference", top_k=1)
-        print(f"DEBUG retrieval for '{term}': {chunks}")   # <-- temporary, remove after checking
         for c in chunks:
             context_blocks.append(f"{term}: {c[:400]}")
 

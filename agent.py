@@ -27,6 +27,7 @@ from providers.base import ChatResult, ProviderError
 from providers.registry import get_provider
 from tools.dispatcher import dispatch
 from tools.schemas import get_relevant_tools
+from grounding_guard import strip_unverified_locators, build_grounded_text
 
 MAX_TOOL_ITERATIONS = 5
 
@@ -59,10 +60,17 @@ def run_agent_turn(
         )
 
         if not result.tool_calls:
-            # Plain answer — done.
-            full_messages.append({"role": "assistant", "content": result.text or ""})
+            # Plain answer — done. Deterministic backstop: strip any
+            # document version/section/page locator that isn't actually
+            # backed by anything retrieved this turn (see grounding_guard.py
+            # for why this is code, not another prompt patch — the
+            # corresponding Hard Rule has failed live testing twice on this
+            # exact sub-pattern).
+            grounded_text = build_grounded_text(full_messages, system_prompt)
+            reply_text = strip_unverified_locators(result.text or "", grounded_text)
+            full_messages.append({"role": "assistant", "content": reply_text})
             return {
-                "reply": result.text or "",
+                "reply": reply_text,
                 "messages": full_messages[1:],  # drop the system message before persisting/returning
                 "tool_calls_made": tool_calls_made,
             }
