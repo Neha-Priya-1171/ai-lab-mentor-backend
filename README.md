@@ -2,6 +2,8 @@
 
 An ESP32 electronics troubleshooting assistant that behaves like a lab mentor, not a search engine: it asks one question at a time, tracks its own hypotheses, insists on a real measurement before it'll speculate, and refuses to state a number it can't source. Live at **[ai-lab-mentor.onrender.com](https://ai-lab-mentor.onrender.com)** — bring your own free Groq or Gemini API key, nothing is stored server-side.
 
+![A live diagnostic session — the assistant interprets a real multimeter reading, cites Ohm's Law and the ESP32's brownout threshold, and updates its ranked hypothesis list from actual measured data](./build-logs/assets/phase7-demo-multimeter-session.png)
+
 ---
 
 ## Scope & Intent
@@ -13,7 +15,7 @@ Concretely, that meant treating a handful of things as non-negotiable from the s
 - **A hard $0 budget**, for the author and every user — no paid tiers, no shared API keys draining under load. This constraint, more than any other, is what forced the architecture into its current shape (see the BYOK section below).
 - **Every claim the assistant makes has to be traceable** to a real datasheet chunk, a hardcoded board-safety fact, a tool's computed output, or an explicit "unverified — general knowledge" flag. Never a plausible-sounding invented number.
 - **Every phase of the build is documented with what broke, not just what shipped.** The [`build-logs/`](./build-logs) folder is the actual engineering record — platform bugs routed around, prompt fixes that failed twice before working, a real hallucination bug caught and fixed via live testing. That record is as much the point of this repo as the running app is.
-- **Feature scope is a deliberate, documented decision, not a running total.** Four additional tools (Symptom → Root Cause Mapping, Component Replacement Suggestion, Sensor Calibration Assistant, AI Lab Notebook) were designed and built in an exploratory phase, then cut before final release to keep the tool-selection surface small and every remaining tool reliably grounded — see "Descoped Features" below.
+- **Feature scope is a deliberate, documented decision, not a running total.** Four additional tools (Symptom → Root Cause Mapping, Component Replacement Suggestion, Sensor Calibration Assistant, AI Lab Notebook) were designed and built in an exploratory phase, then cut before final release to keep the tool-selection surface small and every remaining tool reliably grounded — see [Phase 8](./build-logs/PHASE8_LOG.md) and "Descoped Features" below.
 
 ---
 
@@ -56,6 +58,14 @@ FastAPI backend (main.py)
                       instead of a third prompt patch.
 ```
 
+<details>
+<summary>Earlier architecture (Phase 6.0, single-provider) — kept for the record, superseded by the diagram above</summary>
+
+![Phase 6.0's original single-provider architecture: browser to FastAPI backend, to shared Cohere+Pinecone retrieval and a single BYOK Groq key](./build-logs/assets/phase6-architecture-single-provider.png)
+
+This was the shape of the backend right after the Flowise migration, before Phase 6 added Gemini as a second BYOK provider and replaced hardcoded mode-detection with real tool-calling. Kept here rather than deleted — the diff between this and the current diagram is itself part of the engineering record.
+</details>
+
 | Layer | Choice | Why |
 |---|---|---|
 | Backend | FastAPI (Python) | Self-hosted, replacing a platform (Flowise) that couldn't isolate per-user quota |
@@ -83,10 +93,10 @@ Every phase below shipped only after the previous one's core claim was actually 
 | [5](./build-logs/PHASE5_LOG.md) | Mandatory engineering-mechanism explanations, live confidence display, learning resources | Proxy-tested every feature with a stand-in model before spending real quota on the target model — caught two real bugs for free |
 | [6.0](./build-logs/PHASE6_0_LOG.md) | Migration off Flowise to a self-hosted FastAPI backend, per-user BYOK | Solved the actual structural problem motivating the rebuild: one shared Flowise/Groq key meant any friend testing the app silently drained the author's quota |
 | [6](./build-logs/PHASE6_LOG.md) | Multi-provider BYOK (Groq + Gemini) + genuine tool-calling agent | The real "workflow → agent" milestone — replaced a hardcoded single-prompt routing instruction with real function-calling; confirmed live, on both providers, that the model autonomously invokes ≥2 different tools in one conversation with no routing rule telling it which to use |
-| [7](./build-logs/PHASE7_LOG.md) | Power Budget Calculator, Multimeter Assistant, Symptom → Root Cause Mapping | Found and fixed a real hallucination bug via live testing (a tool fabricating a user's measurement instead of waiting for one); fully diagnosed a Groq rate-limit ceiling down to its exact mechanism rather than patching blind. Symptom → Root Cause Mapping was later cut in the final scope pass — see "Descoped Features" |
-| 8 (cleanup) | AI Lab Viva Mode kept; Component Replacement, Sensor Calibration, and Lab Notebook prototyped then cut; `grounding_guard.py` added as a code-level backstop after two prompt-only fixes plateaued | Final scope discipline: a small set of tools that are reliably grounded beats a larger set with thinner corpus coverage — see "Descoped Features" |
+| [7](./build-logs/PHASE7_LOG.md) | Power Budget Calculator, Multimeter Assistant, Symptom → Root Cause Mapping | Found and fixed a real hallucination bug via live testing (a tool fabricating a user's measurement instead of waiting for one); fully diagnosed a Groq rate-limit ceiling down to its exact mechanism rather than patching blind |
+| [8](./build-logs/PHASE8_LOG.md) | Final scope cut (9 capabilities → 5 tools + Viva Mode), `grounding_guard.py` code-level fabrication backstop, dead-code and repo cleanup, license | A live-caught fabricated citation (a nonexistent "ESP32 Series Datasheet v5.2") closed a prompt-only rule's third failure with a deterministic check instead of a fourth patch; four working, tested tools were deliberately removed to keep the shipped surface reliably grounded |
 
-**The throughline:** Phases 1-2 built the reasoning loop and proved it needed grounding. Phase 3 supplied that grounding. Phases 4-5 turned it into real, tested capabilities. Phase 6.0 solved the problem that made the project unshippable to more than one person at a time. Phase 6 turned a single clever prompt into an actual multi-tool agent. Phase 7 proved that architecture scales to new capabilities without being rebuilt, and caught a real bug the moment a new tool shape (one requiring real-world user action, not just information) stressed an assumption the earlier tools never tested. The final cleanup pass proved the harder discipline — cutting working code to keep the surviving system reliable, rather than shipping everything that was built.
+**The throughline:** Phases 1-2 built the reasoning loop and proved it needed grounding. Phase 3 supplied that grounding. Phases 4-5 turned it into real, tested capabilities. Phase 6.0 solved the problem that made the project unshippable to more than one person at a time. Phase 6 turned a single clever prompt into an actual multi-tool agent. Phase 7 proved that architecture scales to new capabilities without being rebuilt, and caught a real bug the moment a new tool shape stressed an assumption the earlier tools never tested. Phase 8 proved the harder discipline — cutting working code and closing a recurring bug with an engineering control instead of a fourth prompt patch, rather than shipping everything that was ever built.
 
 ---
 
@@ -99,7 +109,13 @@ Four tools were designed, built, and unit-tested in an exploratory phase, then d
 - **Sensor Calibration Assistant** — factory-calibrated vs. empirical calibration guidance
 - **AI Lab Notebook** — short, dated session-log entries distinct from the full Report Generator
 
-None were cut for being broken — all had passing structural tests. They were cut because Groq's free-tier TPM ceiling (documented in detail in Phase 7's log) made a large tool-schema list a real, measured cost on every turn, and because several of them (Component Replacement, Sensor Calibration) relied on a hand-curated index that was explicitly flagged in its own docstring as unverified against real datasheets — a thinner grounding guarantee than the rest of this project holds itself to. Keeping the final toolset small and reliably grounded won out over feature breadth. The code is preserved in git history rather than left running unwired in the final app.
+None were cut for being broken — all had passing structural tests. They were cut because Groq's free-tier TPM ceiling (documented in detail in Phase 7's log) made a large tool-schema list a real, measured cost on every turn, and because two of them (Component Replacement, Sensor Calibration) relied on a hand-curated index explicitly flagged in its own docstring as unverified against real datasheets — a thinner grounding guarantee than the rest of this project holds itself to. Keeping the final toolset small and reliably grounded won out over feature breadth. The code is preserved in git history rather than left running unwired in the final app.
+
+At its widest point the frontend had grown to eight quick-action buttons across three groups — and, in the same session captured below, produced the exact kind of fabricated citation `grounding_guard.py` was subsequently built to catch (a confidently-stated "ESP32 Series Datasheet v5.2" that was never actually retrieved):
+
+![The pre-cleanup UI with all nine candidate tools exposed, and a live response citing a fabricated document version](./build-logs/assets/phase8-before-bloated-ui-and-fabricated-locator-bug.png)
+
+Full writeup of both the scope decision and the bug in [`PHASE8_LOG.md`](./build-logs/PHASE8_LOG.md).
 
 ---
 
@@ -109,6 +125,7 @@ None were cut for being broken — all had passing structural tests. They were c
 - **60 passing structural tests**, zero API calls, covering pure logic, dispatcher integration, the grounding guard's locator-stripping behavior, and the exact call shape the agent loop uses — run before a single token of real model quota is spent on any change.
 - **Live-confirmed on both providers**: the model autonomously selecting between multiple tools in one conversation (Phase 6's actual definition of done), not just passing a unit test.
 - **One real hallucination bug found and fixed through live testing, not assumed away** — a tool was fabricating a user's multimeter reading instead of waiting for a real one; root-caused, fixed with a targeted prompt rule, confirmed fixed on retest.
+- **A second, distinct hallucination pattern caught live and closed with code, not a third prompt patch** — a fabricated datasheet version tag, after the equivalent prompt-only rule had already failed twice on the same pattern.
 - **One real infrastructure ceiling fully diagnosed, not just patched around** — a Groq rate-limit failure was traced to its exact mechanism (the API reserving the full response-token budget against the rate limit, not just prompt content) via a deliberate before/after arithmetic check, rather than trial-and-error retries.
 - **Deployed and publicly reachable**, tested end-to-end against the live instance, not just localhost.
 
@@ -125,3 +142,9 @@ The easy version of this project is a system prompt wrapped around an API call. 
 - **Debugging methodology that survives scrutiny.** Every phase log documents what failed and why, including dead ends (two abandoned embedding providers, a confirmed unfixable platform bug routed around structurally, three failed prompt-patch attempts before a working fix). That's the actual evidence of engineering judgment — not the feature list, the decision trail behind it.
 - **Knowing when to cut, not just when to add.** Four working, tested tools were removed from the final release because they didn't meet the same grounding bar as the rest of the project, under a real, measured infrastructure constraint — a scope decision documented as deliberately as any feature was.
 - **Cost-awareness as an engineering constraint, not an afterthought.** Structural tests before real API calls, proxy-testing with a cheaper model before burning quota on the target model, and — when a real rate-limit ceiling was hit — diagnosing it down to an exact, verified mechanism instead of guessing at fixes.
+
+---
+
+## License
+
+Released under the [MIT License](./LICENSE) — free to use, fork, and adapt, with attribution.
