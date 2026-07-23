@@ -21,13 +21,21 @@ not a string-matching one, and is left to the existing prompt-level
 grounding rules (CONCLUSION-STAGE GROUNDING, the Viva Mode bright-line
 rule, etc.). If those also show recurring failures on a *value* rather
 than a *locator*, that's a separate, harder problem to solve in code.
+
+Known scope gap (documented, not yet fixed): build_grounded_text() below
+only pulls from this turn's "tool"-role messages plus the system prompt
+-- it does not include earlier assistant turns in the session history.
+So a locator that was legitimately established several turns ago (which
+the Viva Mode prompt rule explicitly permits reusing) can still get
+stripped here if referenced again later, since it isn't part of *this*
+turn's tool output. This makes the guard stricter than the prompt rule
+intends, but the failure direction is safe (over-cautious, not under-
+cautious) -- flagged for a future pass rather than blocking on it now.
 """
 
 from __future__ import annotations
 
 import re
-
-print("[grounding_guard] loaded — locator-stripping guard is active")  # TEMP: remove once confirmed live
 
 # Matches: <Document-ish Name> <Datasheet|Specification|Spec|Reference Manual> <locator>
 # "Document-ish Name" is kept loose (up to 5 capitalized/alnum tokens) since

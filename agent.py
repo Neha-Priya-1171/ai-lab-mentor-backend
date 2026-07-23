@@ -81,6 +81,13 @@ def run_agent_turn(
         # arguments is a JSON *string*, not a dict. Getting this shape wrong
         # is what produces Groq's "'messages.N.tool_calls.0.type': property
         # 'type' is missing" 400 error.
+        #
+        # provider_extra (e.g. Gemini's thought_signature) is only attached
+        # when a provider actually populated it — Groq's wire format has no
+        # concept of this field, and sending an extra "provider_extra": null
+        # key on every Groq tool call is an untested assumption riding on
+        # the same wire-shape sensitivity that caused the original 400
+        # error. Omit the key entirely rather than send it as null.
         full_messages.append({
             "role": "assistant",
             "content": result.text,  # None is valid here; Groq/OpenAI accept a null content on a tool-call turn
@@ -92,7 +99,7 @@ def run_agent_turn(
                         "name": tc.name,
                         "arguments": json.dumps(tc.arguments),
                     },
-                    "provider_extra": tc.provider_extra,  # e.g. Gemini's thought_signature; None for Groq
+                    **({"provider_extra": tc.provider_extra} if tc.provider_extra else {}),
                 }
                 for tc in result.tool_calls
             ],

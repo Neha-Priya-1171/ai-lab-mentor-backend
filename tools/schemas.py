@@ -171,62 +171,30 @@ MULTIMETER_ASSISTANT_TOOL = {
         "required": ["measurement_type", "test_point"],
     },
 }
-
-SYMPTOM_MAP_TOOL = {
-    "name": "map_symptom_to_root_cause",
-    "description": (
-        "Browse known failure categories or look up likely root causes for a "
-        "described symptom, grounded in the failure library (common-"
-        "failures.md) plus retrieved context. Call with no args to browse. "
-        "Call with symptom_description when the user describes a fault in "
-        "their own words (e.g. 'display is blank', 'keeps resetting') early "
-        "in a session, to surface documented patterns fast."
-    ),
-    "parameters": {
-        "type": "object",
-        "properties": {
-            "symptom_description": {
-                "type": "string",
-                "description": "Symptom in the user's own words. Omit to browse categories.",
-            },
-            "category_hint": {
-                "type": "string",
-                "description": "Known category, e.g. 'i2c_communication', 'power_brownout', 'firmware_crash', 'output_driver_mismatch', 'sensor_erratic'.",
-            },
-        },
-        "required": [],
-    },
-}
-
 ALL_TOOLS = [
     COMPATIBILITY_CHECKER_TOOL,
     ERROR_LOG_ANALYZER_TOOL,
     REPORT_GENERATOR_TOOL,
     POWER_BUDGET_TOOL,
     MULTIMETER_ASSISTANT_TOOL,
-    SYMPTOM_MAP_TOOL,
 ]
 
 # ---------------------------------------------------------------------------
-# Per-turn tool filtering (Phase 7 TPM mitigation)
+# Per-turn tool filtering (Phase 7 TPM mitigation, restored to its original
+# scope after the Phase 8 tools -- Symptom Mapping, Component Replacement,
+# Sensor Calibration, Lab Notebook -- were cut. See the project conversation
+# log: with Groq's TPM ceiling already tight at 6 tools, and those 4 tools
+# also carrying real hallucination-risk/thin-corpus concerns of their own,
+# the call was to keep this project to a small, deterministic-or-well-
+# grounded core (the guided diagnostic loop + these 5 tools) rather than
+# chase feature breadth. AI Lab Viva Mode stays -- it's prompt-only, no
+# tool schema, so it isn't part of this filtering at all.
 # ---------------------------------------------------------------------------
 # Groq's free-tier TPM limit (12,000) reserves the full tool-schema list
-# against every single request. Sending all 6 tools every turn is real,
-# measured overhead (~1,932 tokens). This trims that -- but deliberately
-# does NOT try to guess "the one tool" the model needs, since a live test
-# proved check_component_compatibility, analyze_error_log,
-# calculate_power_budget, and guide_multimeter_measurement genuinely chain
-# together within a single troubleshooting flow (multimeter reading fed a
-# power-budget check fed another multimeter reading in the same session).
-# Those four are always sent together as one cluster.
-#
-# Only generate_diagnostic_report and map_symptom_to_root_cause are ever
-# excluded, and only when there's a clear, safe signal to do so. Bias is
-# deliberately toward INCLUSION on any ambiguity -- a false inclusion only
-# costs tokens, a false exclusion breaks a real capability. This is a
-# genuine trade-off, not a routing rule reintroducing Phase 4's hardcoded
-# Step-0 mode detection: the model still freely picks among whatever's
-# offered each turn.
+# against every single request, so CORE_TOOL_CLUSTER's 4 tools go every
+# turn (confirmed via live testing to genuinely chain together within a
+# single troubleshooting flow), and Report Generator is added only once
+# there's real history to report on.
 
 CORE_TOOL_CLUSTER = [
     COMPATIBILITY_CHECKER_TOOL,
@@ -235,12 +203,6 @@ CORE_TOOL_CLUSTER = [
     MULTIMETER_ASSISTANT_TOOL,
 ]
 
-_SYMPTOM_KEYWORDS = (
-    "what's usually", "whats usually", "why does", "why is", "common cause",
-    "common failure", "browse", "categories", "category", "what causes",
-    "usual cause", "known issues",
-)
-
 
 def get_relevant_tools(messages: list[dict]) -> list[dict]:
     """
@@ -248,25 +210,11 @@ def get_relevant_tools(messages: list[dict]) -> list[dict]:
     system prompt is prepended), same list run_agent_turn already has.
 
     Returns the tool list to actually send this turn. Always includes the
-    4-tool core cluster. Conditionally adds Report Generator (once there's
-    real history to report on -- mirrors static/index.html's own
-    reportBtn disabled-until-first-exchange rule) and Symptom Mapping
-    (early in a session, or on a clear symptom-browsing phrase).
+    4-tool core cluster. Adds Report Generator once there's real history to
+    report on -- mirrors static/index.html's own reportBtn
+    disabled-until-first-exchange rule.
     """
     tools = list(CORE_TOOL_CLUSTER)
-
-    latest_user_text = ""
-    for m in reversed(messages):
-        if m.get("role") == "user":
-            latest_user_text = str(m.get("content") or "").lower()
-            break
-
     if len(messages) > 1:
         tools.append(REPORT_GENERATOR_TOOL)
-
-    early_session = len(messages) <= 4
-    symptom_signal = any(kw in latest_user_text for kw in _SYMPTOM_KEYWORDS)
-    if early_session or symptom_signal:
-        tools.append(SYMPTOM_MAP_TOOL)
-
     return tools

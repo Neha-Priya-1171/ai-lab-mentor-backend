@@ -13,6 +13,7 @@ Concretely, that meant treating a handful of things as non-negotiable from the s
 - **A hard $0 budget**, for the author and every user — no paid tiers, no shared API keys draining under load. This constraint, more than any other, is what forced the architecture into its current shape (see the BYOK section below).
 - **Every claim the assistant makes has to be traceable** to a real datasheet chunk, a hardcoded board-safety fact, a tool's computed output, or an explicit "unverified — general knowledge" flag. Never a plausible-sounding invented number.
 - **Every phase of the build is documented with what broke, not just what shipped.** The [`build-logs/`](./build-logs) folder is the actual engineering record — platform bugs routed around, prompt fixes that failed twice before working, a real hallucination bug caught and fixed via live testing. That record is as much the point of this repo as the running app is.
+- **Feature scope is a deliberate, documented decision, not a running total.** Four additional tools (Symptom → Root Cause Mapping, Component Replacement Suggestion, Sensor Calibration Assistant, AI Lab Notebook) were designed and built in an exploratory phase, then cut before final release to keep the tool-selection surface small and every remaining tool reliably grounded — see "Descoped Features" below.
 
 ---
 
@@ -35,13 +36,24 @@ FastAPI backend (main.py)
                 │     gemini_provider.py  (native translation layer, incl. Gemini 3.x
                 │                          "thought_signature" handling on tool calls)
                 │
-                └── tools/dispatcher.py  ──► 6 real, callable tools
-                      check_component_compatibility   (board profile + RAG)
-                      analyze_error_log                (structured signature matching + RAG)
-                      generate_diagnostic_report        (10-section synthesis)
-                      calculate_power_budget             (pure Ohm's-Law/current-sum math)
-                      guide_multimeter_measurement       (board profile + RAG, "measure before speculate")
-                      map_symptom_to_root_cause          (browsable failure-category index + RAG)
+                ├── tools/dispatcher.py  ──► 5 real, callable tools
+                │     check_component_compatibility   (board profile + RAG)
+                │     analyze_error_log                (structured signature matching + RAG)
+                │     generate_diagnostic_report        (10-section synthesis)
+                │     calculate_power_budget             (pure Ohm's-Law/current-sum math)
+                │     guide_multimeter_measurement       (board profile + RAG, "measure before speculate")
+                │
+                ├── AI Lab Viva Mode  ──► prompt-only persona (no tool schema, no
+                │                         retrieval call) — quizzes the user Socratically
+                │                         on their own diagnostic reasoning instead of
+                │                         the model doing the asking
+                │
+                └── grounding_guard.py  ──► deterministic post-generation check: strips
+                      any document version/section/page locator ("Datasheet v5.2",
+                      "Section 8") the model invented but never actually retrieved this
+                      turn. Added after the equivalent prompt-only rule failed live
+                      testing twice on this exact pattern — a code-level backstop
+                      instead of a third prompt patch.
 ```
 
 | Layer | Choice | Why |
@@ -52,6 +64,7 @@ FastAPI backend (main.py)
 | Retrieval | Cohere `embed-english-v3.0` + Pinecone (serverless) | Shared keys — read-mostly embedding/query traffic has far more free-tier headroom than generation |
 | Ground truth | `ground_truth.py` — ESP32 GPIO board profile, error-signature table | Small, fixed, safety-relevant facts belong in tested Python data, not re-derived from a prompt every turn |
 | Tool-calling agent | `agent.py`, capped at 5 iterations | The model selects tools based on conversation context — no hardcoded routing |
+| Grounding backstop | `grounding_guard.py` | A deterministic check for one narrow, repeat-offending fabrication pattern that two rounds of prompt engineering didn't fully close |
 | Frontend | Static HTML/CSS/vanilla JS | Deliberately no framework — the interesting engineering here is server-side |
 | Hosting | Render (free tier) | $0 budget constraint; documented tradeoff: ~30-50s cold-start after idle |
 
@@ -70,16 +83,30 @@ Every phase below shipped only after the previous one's core claim was actually 
 | [5](./build-logs/PHASE5_LOG.md) | Mandatory engineering-mechanism explanations, live confidence display, learning resources | Proxy-tested every feature with a stand-in model before spending real quota on the target model — caught two real bugs for free |
 | [6.0](./build-logs/PHASE6_0_LOG.md) | Migration off Flowise to a self-hosted FastAPI backend, per-user BYOK | Solved the actual structural problem motivating the rebuild: one shared Flowise/Groq key meant any friend testing the app silently drained the author's quota |
 | [6](./build-logs/PHASE6_LOG.md) | Multi-provider BYOK (Groq + Gemini) + genuine tool-calling agent | The real "workflow → agent" milestone — replaced a hardcoded single-prompt routing instruction with real function-calling; confirmed live, on both providers, that the model autonomously invokes ≥2 different tools in one conversation with no routing rule telling it which to use |
-| [7](./build-logs/PHASE7_LOG.md) | Power Budget Calculator, Multimeter Assistant, Symptom → Root Cause Mapping | Found and fixed a real hallucination bug via live testing (a tool fabricating a user's measurement instead of waiting for one); fully diagnosed a Groq rate-limit ceiling down to its exact mechanism rather than patching blind |
+| [7](./build-logs/PHASE7_LOG.md) | Power Budget Calculator, Multimeter Assistant, Symptom → Root Cause Mapping | Found and fixed a real hallucination bug via live testing (a tool fabricating a user's measurement instead of waiting for one); fully diagnosed a Groq rate-limit ceiling down to its exact mechanism rather than patching blind. Symptom → Root Cause Mapping was later cut in the final scope pass — see "Descoped Features" |
+| 8 (cleanup) | AI Lab Viva Mode kept; Component Replacement, Sensor Calibration, and Lab Notebook prototyped then cut; `grounding_guard.py` added as a code-level backstop after two prompt-only fixes plateaued | Final scope discipline: a small set of tools that are reliably grounded beats a larger set with thinner corpus coverage — see "Descoped Features" |
 
-**The throughline:** Phases 1-2 built the reasoning loop and proved it needed grounding. Phase 3 supplied that grounding. Phases 4-5 turned it into real, tested capabilities. Phase 6.0 solved the problem that made the project unshippable to more than one person at a time. Phase 6 turned a single clever prompt into an actual multi-tool agent. Phase 7 proved that architecture scales to new capabilities without being rebuilt, and caught a real bug the moment a new tool shape (one requiring real-world user action, not just information) stressed an assumption the earlier tools never tested.
+**The throughline:** Phases 1-2 built the reasoning loop and proved it needed grounding. Phase 3 supplied that grounding. Phases 4-5 turned it into real, tested capabilities. Phase 6.0 solved the problem that made the project unshippable to more than one person at a time. Phase 6 turned a single clever prompt into an actual multi-tool agent. Phase 7 proved that architecture scales to new capabilities without being rebuilt, and caught a real bug the moment a new tool shape (one requiring real-world user action, not just information) stressed an assumption the earlier tools never tested. The final cleanup pass proved the harder discipline — cutting working code to keep the surviving system reliable, rather than shipping everything that was built.
+
+---
+
+## Descoped Features
+
+Four tools were designed, built, and unit-tested in an exploratory phase, then deliberately removed before final release:
+
+- **Symptom → Root Cause Mapping** — a browsable failure-category index
+- **Component Replacement Suggestion** — cross-referencing substitute parts against the loaded datasheet corpus
+- **Sensor Calibration Assistant** — factory-calibrated vs. empirical calibration guidance
+- **AI Lab Notebook** — short, dated session-log entries distinct from the full Report Generator
+
+None were cut for being broken — all had passing structural tests. They were cut because Groq's free-tier TPM ceiling (documented in detail in Phase 7's log) made a large tool-schema list a real, measured cost on every turn, and because several of them (Component Replacement, Sensor Calibration) relied on a hand-curated index that was explicitly flagged in its own docstring as unverified against real datasheets — a thinner grounding guarantee than the rest of this project holds itself to. Keeping the final toolset small and reliably grounded won out over feature breadth. The code is preserved in git history rather than left running unwired in the final app.
 
 ---
 
 ## Results So Far
 
-- **6 real, callable tools**, spanning three genuinely different mechanisms: grounded lookup (board profile + RAG), pure deterministic computation (Ohm's Law, current summation), and a browsable knowledge index — not six variations on the same pattern.
-- **59+ passing structural tests**, zero API calls, covering pure logic, dispatcher integration, and the exact call shape the agent loop uses — run before a single token of real model quota is spent on any change.
+- **5 real, callable tools**, spanning three genuinely different mechanisms: grounded lookup (board profile + RAG), pure deterministic computation (Ohm's Law, current summation), and structured signature matching — plus a prompt-only Viva Mode persona and a deterministic grounding-guard backstop that catches a fabrication pattern two rounds of prompt engineering didn't fully close.
+- **60 passing structural tests**, zero API calls, covering pure logic, dispatcher integration, the grounding guard's locator-stripping behavior, and the exact call shape the agent loop uses — run before a single token of real model quota is spent on any change.
 - **Live-confirmed on both providers**: the model autonomously selecting between multiple tools in one conversation (Phase 6's actual definition of done), not just passing a unit test.
 - **One real hallucination bug found and fixed through live testing, not assumed away** — a tool was fabricating a user's multimeter reading instead of waiting for a real one; root-caused, fixed with a targeted prompt rule, confirmed fixed on retest.
 - **One real infrastructure ceiling fully diagnosed, not just patched around** — a Groq rate-limit failure was traced to its exact mechanism (the API reserving the full response-token budget against the rate limit, not just prompt content) via a deliberate before/after arithmetic check, rather than trial-and-error retries.
@@ -92,8 +119,9 @@ Every phase below shipped only after the previous one's core claim was actually 
 The easy version of this project is a system prompt wrapped around an API call. What's actually here is meant to demonstrate the difference:
 
 - **Tool-use over prompt-only routing.** Phase 6 exists specifically because a single giant prompt doing internal "mode detection" is not agentic behavior, and the project says so plainly in its own logs rather than calling it something it isn't.
-- **Grounding discipline enforced structurally, not just requested.** Ground-truth Python data for safety-critical fixed facts, RAG for genuine long-form knowledge, and an explicit, tested rule against inventing a number in *either* a stated fact or a piece of fabricated dialogue — the latter being a real bug this project found and fixed, not a hypothetical.
+- **Grounding discipline enforced structurally, not just requested.** Ground-truth Python data for safety-critical fixed facts, RAG for genuine long-form knowledge, a deterministic code-level backstop for the one fabrication pattern prompting alone couldn't fully close, and an explicit, tested rule against inventing a number in *either* a stated fact or a piece of fabricated dialogue — the latter being a real bug this project found and fixed, not a hypothetical.
 - **Provider-agnostic by design, not by accident.** Adding Gemini after Groq took one adapter, not a rewrite, because the abstraction boundary was decided before the second provider existed.
 - **Multi-tenancy taken seriously under a real constraint.** BYOK isn't a security theater checkbox here — it's the direct, load-bearing fix for a real quota-exhaustion bug that made the original version unshareable.
 - **Debugging methodology that survives scrutiny.** Every phase log documents what failed and why, including dead ends (two abandoned embedding providers, a confirmed unfixable platform bug routed around structurally, three failed prompt-patch attempts before a working fix). That's the actual evidence of engineering judgment — not the feature list, the decision trail behind it.
+- **Knowing when to cut, not just when to add.** Four working, tested tools were removed from the final release because they didn't meet the same grounding bar as the rest of the project, under a real, measured infrastructure constraint — a scope decision documented as deliberately as any feature was.
 - **Cost-awareness as an engineering constraint, not an afterthought.** Structural tests before real API calls, proxy-testing with a cheaper model before burning quota on the target model, and — when a real rate-limit ceiling was hit — diagnosing it down to an exact, verified mechanism instead of guessing at fixes.

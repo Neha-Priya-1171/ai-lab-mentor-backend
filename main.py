@@ -44,7 +44,7 @@ class ChatMessage(BaseModel):
 
 
 class ChatRequest(BaseModel):
-    provider: str = "groq"          # "groq" or "gemini" — Phase 6 multi-provider BYOK
+    provider: str = "gemini"        # "groq" or "gemini" — Gemini is primary; Groq stays available but is more TPM-constrained on its free tier
     api_key: str                    # the user's own key for whichever provider they picked
     message: str
     history: list[ChatMessage] = []

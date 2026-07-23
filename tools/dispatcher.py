@@ -32,7 +32,6 @@ from tools.multimeter_reference import (
     interpret_digital_logic_reading,
     interpret_continuity_reading,
 )
-from tools.symptom_map import list_categories, get_category, format_category_info
 
 RetrieverFn = Callable[[str, int], list[str]]
 _retriever: RetrieverFn | None = None
@@ -266,54 +265,6 @@ def guide_multimeter_measurement(
 
     return "\n".join(lines)
 
-# ---------------------------------------------------------------------------
-# Symptom -> Root Cause Mapping (Phase 7)
-# ---------------------------------------------------------------------------
-# Per V2_ROADMAP.md: "a browsable, queryable version of the existing
-# common-failures.md knowledge base." The category index in
-# tools/symptom_map.py is browsable on its own (no retrieval needed, and
-# built only from signatures already validated in this project's phase
-# logs). Retrieval against the existing shared corpus (which already
-# includes common-failures.md, per Phase 3) fills in whatever the category
-# index doesn't cover -- same _retrieve() hook every other tool here uses,
-# no new Cohere/Pinecone wiring needed.
-
-def map_symptom_to_root_cause(symptom_description: str | None = None, category_hint: str | None = None) -> str:
-    category_info = get_category(category_hint) if category_hint else None
-
-    # Pure browse mode: no symptom text and no resolvable category -- hand
-    # back the index rather than guessing what the user meant.
-    if not symptom_description and category_info is None:
-        if category_hint:
-            return f"'{category_hint}' didn't match a known category.\n\n{list_categories()}"
-        return list_categories()
-
-    lines: list[str] = []
-
-    if category_info:
-        lines.append(format_category_info(category_info))
-
-    if symptom_description:
-        chunks = _retrieve(f"{symptom_description} ESP32 common failure root cause", top_k=3)
-        if chunks:
-            lines.append(f"\nRetrieved failure-library context for '{symptom_description}':")
-            for c in chunks:
-                lines.append(f"  - {c[:500]}")
-        else:
-            lines.append(
-                f"\nNo failure-library context retrieved for '{symptom_description}'. "
-                f"Reason from general engineering knowledge if needed, flagged as unverified, "
-                f"or ask a clarifying question rather than asserting a specific documented cause."
-            )
-
-    lines.append(
-        "\nReminder to the model: only state a root cause as 'documented' if it came from "
-        "the category info or retrieved context above. Never invent a citation to "
-        "common-failures.md or a datasheet that wasn't actually retrieved this turn."
-    )
-
-    return "\n".join(lines)
-
 
 # ---------------------------------------------------------------------------
 # Power Budget Calculator (Phase 7)
@@ -336,7 +287,6 @@ _DISPATCH_TABLE: dict[str, Callable[..., str]] = {
     "generate_diagnostic_report": generate_diagnostic_report,
     "calculate_power_budget": calculate_power_budget,
     "guide_multimeter_measurement": guide_multimeter_measurement,
-    "map_symptom_to_root_cause": map_symptom_to_root_cause,
 }
 
 

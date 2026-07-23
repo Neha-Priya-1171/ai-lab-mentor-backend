@@ -4,45 +4,59 @@
 <meta charset="UTF-8">
 <title>AI Lab Mentor</title>
 <style>
-  body { font-family: system-ui, sans-serif; max-width: 640px; margin: 40px auto; padding: 0 16px; color: #222; }
-  h1 { font-size: 20px; }
-  #setup, #chat { border: 1px solid #ddd; border-radius: 8px; padding: 16px; margin-top: 16px; }
-  input, button, textarea, select { font-size: 14px; }
-  #apiKey, #providerSelect { width: 100%; padding: 8px; box-sizing: border-box; margin-top: 6px; }
-  #log { min-height: 200px; max-height: 400px; overflow-y: auto; margin-bottom: 12px; }
-  .msg { padding: 8px 12px; margin: 6px 0; border-radius: 6px; white-space: pre-wrap; }
-  .user { background: #eef2ff; }
-  .assistant { background: #f4f4f4; }
-  .tool-note { font-size: 12px; color: #888; margin: -4px 0 8px 4px; }
+  :root {
+    --ink: #1f2430;
+    --muted: #6b7280;
+    --border: #e2e5ea;
+    --panel: #fafbfc;
+    --accent: #3457d5;
+    --accent-soft: #eef1fd;
+  }
+  body { font-family: system-ui, sans-serif; max-width: 680px; margin: 40px auto; padding: 0 16px; color: var(--ink); }
+  h1 { font-size: 20px; margin-bottom: 4px; }
+  h1 .sub { display: block; font-size: 13px; font-weight: 400; color: var(--muted); margin-top: 2px; }
+  #setup, #chat { border: 1px solid var(--border); border-radius: 10px; padding: 16px; margin-top: 16px; background: #fff; }
+  input, button, textarea, select { font-size: 14px; font-family: inherit; }
+  #apiKey, #providerSelect { width: 100%; padding: 8px; box-sizing: border-box; margin-top: 6px; border: 1px solid var(--border); border-radius: 6px; }
+  #log { min-height: 200px; max-height: 420px; overflow-y: auto; margin-bottom: 12px; }
+  .msg { padding: 8px 12px; margin: 6px 0; border-radius: 8px; white-space: pre-wrap; line-height: 1.4; }
+  .user { background: var(--accent-soft); }
+  .assistant { background: var(--panel); border: 1px solid var(--border); }
+  .tool-note { font-size: 12px; color: var(--muted); margin: -4px 0 10px 4px; }
   #inputRow { display: flex; gap: 8px; }
-  #messageInput { flex: 1; padding: 8px; }
-  button { padding: 8px 14px; cursor: pointer; }
-  small { color: #666; display: block; margin-top: 4px; }
-  #chatHeader { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
-  #chatHeader h2 { font-size: 14px; margin: 0; color: #555; }
-  #newSessionBtn { background: #f4f4f4; border: 1px solid #ccc; border-radius: 6px; font-size: 12px; padding: 6px 10px; }
-  #newSessionBtn:hover { background: #eaeaea; }
-  #quickActions { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
-  .quick-btn { background: #fff; border: 1px solid #ccc; border-radius: 6px; font-size: 13px; padding: 6px 12px; cursor: pointer; }
-  .quick-btn:hover { background: #f4f4f4; }
-  .quick-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+  #messageInput { flex: 1; padding: 8px; border: 1px solid var(--border); border-radius: 6px; }
+  button { padding: 8px 14px; cursor: pointer; border-radius: 6px; }
+  #inputRow button { background: var(--accent); color: #fff; border: none; }
+  #inputRow button:hover { opacity: 0.9; }
+  small { color: var(--muted); display: block; margin-top: 4px; }
+
+  #chatHeader { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+  #chatHeader h2 { font-size: 14px; margin: 0; color: var(--muted); }
+  #newSessionBtn { background: var(--panel); border: 1px solid var(--border); font-size: 12px; padding: 6px 10px; color: var(--ink); }
+  #newSessionBtn:hover { background: #f0f1f3; }
+
+  .actionGroupLabel { display: block; font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); margin-bottom: 5px; }
+  .quickActions { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
+  .quick-btn { background: #fff; border: 1px solid var(--border); font-size: 13px; padding: 6px 11px; color: var(--ink); }
+  .quick-btn:hover { background: var(--panel); border-color: #d1d5db; }
+  .quick-btn:disabled { opacity: 0.4; cursor: not-allowed; }
   .quick-btn:disabled:hover { background: #fff; }
 </style>
 </head>
 <body>
 
-<h1>AI Lab Mentor — Circuit Diagnostic AI</h1>
+<h1>AI Lab Mentor<span class="sub">Circuit Diagnostic AI — an engineering lab mentor for ESP32 projects</span></h1>
 
 <div id="setup">
   <label for="providerSelect">LLM provider</label>
   <select id="providerSelect">
+    <option value="gemini" selected>Google Gemini (gemini-3.5-flash)</option>
     <option value="groq">Groq (llama-3.3-70b-versatile)</option>
-    <option value="gemini">Google Gemini (gemini-3.5-flash)</option>
   </select>
 
   <label for="apiKey" style="margin-top:12px; display:block;">Your API key for the selected provider</label>
   <input id="apiKey" type="password" placeholder="Paste your own key here">
-  <small id="keyHint">Get a free key at <a href="https://console.groq.com/keys" target="_blank">console.groq.com/keys</a>. It stays in your browser only — never sent anywhere but your chosen provider.</small>
+  <small id="keyHint">Get a free key at <a href="https://aistudio.google.com/apikey" target="_blank">aistudio.google.com/apikey</a>. It stays in your browser only — never sent anywhere but Google.</small>
 </div>
 
 <div id="chat">
@@ -50,13 +64,15 @@
     <h2>Diagnostic session</h2>
     <button id="newSessionBtn" onclick="newSession()">↻ New Session</button>
   </div>
-  <div id="quickActions">
-    <button class="quick-btn" onclick="quickAction('Help me check if my power supply can handle all my components.')">🔋 Power Budget Check</button>
-    <button class="quick-btn" onclick="quickAction('Walk me through taking a multimeter measurement to help diagnose my issue.')">🔌 Multimeter Assistant</button>
-    <button class="quick-btn" onclick="quickAction('What common failure categories do you know about?')">🔍 Browse Known Issues</button>
+
+  <span class="actionGroupLabel">Quick actions</span>
+  <div class="quickActions">
+    <button class="quick-btn" onclick="quickAction('Help me check if my power supply can handle all my components.')">🔋 Power Budget</button>
+    <button class="quick-btn" onclick="quickAction('Walk me through taking a multimeter measurement to help diagnose my issue.')">🔌 Multimeter</button>
     <button class="quick-btn" id="reportBtn" disabled onclick="quickAction('Can you generate a full diagnostic report for this session?')">📄 Generate Report</button>
     <button class="quick-btn" id="quizBtn" disabled onclick="quickAction('Quiz me on the reasoning behind this session.')">🎓 Quiz Me</button>
   </div>
+
   <div id="log"></div>
   <div id="inputRow">
     <input id="messageInput" type="text" placeholder="Describe your circuit issue, paste an error log, or ask a compatibility question...">
@@ -71,8 +87,8 @@ const providerSelect = document.getElementById("providerSelect");
 const keyHint = document.getElementById("keyHint");
 
 const PROVIDER_HINTS = {
-  groq: 'Get a free key at <a href="https://console.groq.com/keys" target="_blank">console.groq.com/keys</a>. It stays in your browser only — never sent anywhere but Groq.',
   gemini: 'Get a free key at <a href="https://aistudio.google.com/apikey" target="_blank">aistudio.google.com/apikey</a>. It stays in your browser only — never sent anywhere but Google.',
+  groq: 'Get a free key at <a href="https://console.groq.com/keys" target="_blank">console.groq.com/keys</a>. It stays in your browser only — never sent anywhere but Groq.',
 };
 
 providerSelect.addEventListener("change", () => {

@@ -141,8 +141,12 @@ KEYWORD_SIGNATURES = {
 
 
 def _normalize_hex_code(code: str) -> str:
-    """'0x0f' and '0xF' both normalize to '0xf' to match RESET_REASON_CODES keys."""
-    digits = code[2:].lstrip("0").lower()
+    """'0x0f' and '0xF' both normalize to '0xF' to match RESET_REASON_CODES keys
+    (which use uppercase hex letters, e.g. '0xA'..'0xF'). Bug fixed here: this
+    previously lowercased the result, so every code from 0xA-0xF -- including
+    0xF (brownout) -- never matched the dict and silently fell through to
+    'not in the known reference table', even though the code was recognized."""
+    digits = code[2:].lstrip("0").upper()
     return "0x" + (digits if digits else "0")
 
 
